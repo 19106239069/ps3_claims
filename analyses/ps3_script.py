@@ -5,6 +5,7 @@ import pandas as pd
 from IPython.display import display
 from dask_ml.preprocessing import Categorizer
 from glum import GeneralizedLinearRegressor, TweedieDistribution
+import lightgbm as lgb
 from lightgbm import LGBMRegressor
 from sklearn.compose import ColumnTransformer
 from sklearn.metrics import auc
@@ -617,6 +618,83 @@ lgbm_comparison = pd.DataFrame(
 )
 
 display(lgbm_comparison.round(5))
+
+# %%
+# ============================================================
+# PS 4 - Exercise 2: Learning curve
+# ============================================================
+
+# Step 1: Refit the best constrained LightGBM
+# with training and testing evaluation sets
+
+best_constrained_lgbm = (
+    constrained_lgbm_search.best_estimator_
+)
+
+best_constrained_lgbm.fit(
+    X_train_t,
+    y_train_t,
+
+    # Exposure weights for training data
+    sample_weight=w_train_t,
+
+    # Evaluate on both training and testing datasets
+    eval_set=[
+        (X_train_t, y_train_t),
+        (X_test_t, y_test_t)
+    ],
+
+    # Give names to the two evaluation datasets
+    eval_names=["train", "test"],
+
+    # Exposure weights for evaluation datasets
+    eval_sample_weight=[
+        w_train_t,
+        w_test_t
+    ],
+
+    # Use Tweedie deviance as the evaluation metric
+    eval_metric="tweedie"
+)
+
+# Check evaluation results
+
+print("Evaluation datasets:")
+print(best_constrained_lgbm.evals_result_.keys())
+
+print("\nEvaluation metrics:")
+print({
+    dataset: list(metrics.keys())
+    for dataset, metrics in best_constrained_lgbm.evals_result_.items()
+})
+
+# Step 2: Plot the learning curve
+
+ax = lgb.plot_metric(
+    best_constrained_lgbm,
+    metric="tweedie",
+    dataset_names=["train", "test"],
+    title="Learning Curve - Constrained LightGBM",
+    xlabel="Boosting Iterations",
+    ylabel="Tweedie Deviance",
+    figsize=(9, 5)
+)
+
+plt.tight_layout()
+plt.show()
+
+# Find the iteration with the lowest test deviance
+
+eval_results = best_constrained_lgbm.evals_result_
+
+train_curve = eval_results["train"]["tweedie"]
+test_curve = eval_results["test"]["tweedie"]
+
+best_iteration = np.argmin(test_curve) + 1
+
+print("Best iteration:", best_iteration)
+print("Minimum test deviance:", min(test_curve))
+print("Train deviance at best iteration:", train_curve[best_iteration - 1])
 
 # %%
 # Let's compare the sorting of the pure premium predictions
