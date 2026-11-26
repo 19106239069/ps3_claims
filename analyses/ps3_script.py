@@ -12,7 +12,7 @@ from sklearn.metrics import auc
 from sklearn.model_selection import GridSearchCV, KFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, SplineTransformer, StandardScaler
-
+from evaluation import evaluate_predictions
 from ps3.data import create_sample_split, load_transform
 
 
@@ -695,6 +695,39 @@ best_iteration = np.argmin(test_curve) + 1
 print("Best iteration:", best_iteration)
 print("Minimum test deviance:", min(test_curve))
 print("Train deviance at best iteration:", train_curve[best_iteration - 1])
+
+# %%
+# ============================================================
+# PS 4 - Exercise 3: Metrics function
+# ============================================================
+
+# Step 1: Evaluate the unconstrained LGBM on the test set
+
+unconstrained_metrics = evaluate_predictions(
+    y_true=y_test_t,
+    y_pred=df_test["pp_t_lgbm"],
+    sample_weight=w_test_t
+)
+
+# Step 2: Evaluate the constrained LGBM on the test set
+
+constrained_metrics = evaluate_predictions(
+    y_true=y_test_t,
+    y_pred=df_test["pp_t_lgbm_constrained"],
+    sample_weight=w_test_t
+)
+
+# Step 3: Compare the metrics of both models
+
+metrics_comparison = pd.concat(
+    {
+        "Unconstrained LGBM": unconstrained_metrics["Value"],
+        "Constrained LGBM": constrained_metrics["Value"]
+    },
+    axis=1
+)
+
+display(metrics_comparison.round(5))
 
 # %%
 # Let's compare the sorting of the pure premium predictions
