@@ -852,6 +852,67 @@ pdp_unconstrained_cat.plot(
 )
 
 # %%
+# ============================================================
+# PS 4 - Exercise 5: Shapley
+# ============================================================
+
+# Step 1: Define DALEX Explainer for the initial GLM
+
+explainer_glm = dx.Explainer(
+    model=t_glm1,
+    data=X_test_t,
+    y=y_test_t,
+    predict_function=dalex_predict,
+    label="Initial GLM",
+    verbose=False
+)
+
+# Step 2: Select one observation from the test set
+
+new_observation = X_test_t.iloc[[0]].copy()
+
+print("Selected observation:")
+display(new_observation)
+
+print("Actual PurePremium:")
+print(y_test_t.iloc[0])
+
+print("\nConstrained LGBM prediction:")
+print(best_constrained_lgbm.predict(new_observation))
+
+print("\nInitial GLM prediction:")
+print(t_glm1.predict(new_observation))
+
+# Step 3: Calculate SHAP values for Constrained LGBM
+
+shap_constrained = explainer_constrained.predict_parts(
+    new_observation=new_observation,
+    type="shap",
+    N=300,
+    B=25,
+    random_state=42
+)
+
+# Calculate SHAP values for Initial GLM
+
+shap_glm = explainer_glm.predict_parts(
+    new_observation=new_observation,
+    type="shap",
+    N=300,
+    B=25,
+    random_state=42
+)
+
+# Step 4: Plot and compare the two SHAP decompositions
+
+shap_constrained.plot(
+    objects=shap_glm,
+    title="SHAP Decomposition: Constrained LGBM vs Initial GLM",
+    max_vars=9,
+    digits=3
+)
+
+# %%
 # Let's compare the sorting of the pure premium predictions
 # %%
 # Compare all models
