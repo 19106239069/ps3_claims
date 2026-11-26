@@ -426,6 +426,199 @@ display(
 )
 
 # %%
+# ============================================================
+# PS 4 - Exercise 1: Monotonicity constraints
+# ============================================================
+
+# Step 1: Plot exposure-weighted average pure premium
+# by BonusMalus group
+
+bm_summary = (
+    df_train.loc[df_train["Exposure"] > 0]
+    .groupby("BonusMalus", as_index=False)
+    .agg(
+        total_claim_amount=("ClaimAmountCut", "sum"),
+        total_exposure=("Exposure", "sum"),
+        n_policies=("IDpol", "count")
+    )
+)
+
+# Calculate exposure-weighted average pure premium
+bm_summary["weighted_avg_pure_premium"] = (
+    bm_summary["total_claim_amount"]
+    / bm_summary["total_exposure"]
+)
+
+# Plot
+fig, ax = plt.subplots(figsize=(9, 5))
+
+ax.plot(
+    bm_summary["BonusMalus"],
+    bm_summary["weighted_avg_pure_premium"],
+    marker="o",
+    linewidth=1.5
+)
+
+ax.set(
+    title="Exposure-weighted Average Pure Premium by BonusMalus",
+    xlabel="BonusMalus",
+    ylabel="Exposure-weighted Average Pure Premium"
+)
+
+ax.grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+# Step 2: Define monotonicity constraints
+
+feature_names = X_train_t.columns.tolist()
+
+monotone_constraints = [
+    1 if feature == "BonusMalus" else 0
+    for feature in feature_names
+]
+
+# Check the feature order and constraints
+print("Feature order and monotonicity constraints:")
+
+print(
+    dict(zip(feature_names, monotone_constraints))
+)
+
+# Check that the constraint vector has the correct length
+assert len(monotone_constraints) == X_train_t.shape[1]
+
+# Check that only BonusMalus has an increasing constraint
+assert monotone_constraints.count(1) == 1
+assert monotone_constraints[feature_names.index("BonusMalus")] == 1
+
+# Create LightGBM with monotonicity constraint
+
+constrained_lgbm = LGBMRegressor(
+    objective="tweedie",
+    tweedie_variance_power=1.5,
+    learning_rate=0.05,
+    n_estimators=300,
+    num_leaves=15,
+    max_depth=6,
+    min_child_samples=100,
+    subsample=0.8,
+    subsample_freq=1,
+    colsample_bytree=0.8,
+    reg_lambda=5.0,
+    random_state=42,
+    n_jobs=-1,
+    verbosity=-1,
+
+    # Monotonicity constraint
+    monotone_constraints=monotone_constraints
+)
+
+# Step 3: Cross-validate the constrained LightGBM
+
+constrained_lgbm_search = GridSearchCV(
+    estimator=constrained_lgbm,
+    param_grid=param_grid,
+    scoring=negative_weighted_tweedie_deviance,
+    cv=lgbm_search.cv,
+    n_jobs=1,
+    refit=True,
+    verbose=1,
+    return_train_score=True
+)
+
+# Fit the constrained model
+constrained_lgbm_search.fit(
+    X_train_t,
+    y_train_t,
+    sample_weight=w_train_t
+)
+
+# Display the best parameters
+print("Best constrained LGBM parameters:")
+print(constrained_lgbm_search.best_params_)
+
+print("Best constrained CV deviance:")
+print(-constrained_lgbm_search.best_score_)
+
+# Get the best constrained estimator
+
+best_constrained_lgbm = constrained_lgbm_search.best_estimator_
+
+# Make predictions
+df_train["pp_t_lgbm_constrained"] = (
+    best_constrained_lgbm.predict(X_train_t)
+)
+
+df_test["pp_t_lgbm_constrained"] = (
+    best_constrained_lgbm.predict(X_test_t)
+)
+
+# Save predictions in the original dataframe as well
+df["pp_t_lgbm_constrained"] = np.nan
+
+df.loc[df_train.index, "pp_t_lgbm_constrained"] = (
+    df_train["pp_t_lgbm_constrained"]
+)
+
+df.loc[df_test.index, "pp_t_lgbm_constrained"] = (
+    df_test["pp_t_lgbm_constrained"]
+)
+
+print(
+    df[
+        ["IDpol", "BonusMalus", "pp_t_lgbm_constrained"]
+    ].head()
+)
+
+
+# Calculate train and test deviance
+
+train_deviance_lgbm_constrained = weighted_deviance(
+    y_train_t,
+    df_train["pp_t_lgbm_constrained"],
+    w_train_t
+)
+
+test_deviance_lgbm_constrained = weighted_deviance(
+    y_test_t,
+    df_test["pp_t_lgbm_constrained"],
+    w_test_t
+)
+
+print(
+    "Constrained LGBM training deviance:",
+    train_deviance_lgbm_constrained
+)
+
+print(
+    "Constrained LGBM testing deviance:",
+    test_deviance_lgbm_constrained
+)
+
+# Compare unconstrained and constrained LightGBM
+
+lgbm_comparison = pd.DataFrame(
+    [
+        {
+            "Model": "Unconstrained LGBM",
+            "CV Deviance": -lgbm_search.best_score_,
+            "Train Deviance": train_deviance_lgbm,
+            "Test Deviance": test_deviance_lgbm,
+        },
+        {
+            "Model": "Constrained LGBM",
+            "CV Deviance": -constrained_lgbm_search.best_score_,
+            "Train Deviance": train_deviance_lgbm_constrained,
+            "Test Deviance": test_deviance_lgbm_constrained,
+        },
+    ]
+)
+
+display(lgbm_comparison.round(5))
+
+# %%
 # Let's compare the sorting of the pure premium predictions
 # %%
 # Compare all models
