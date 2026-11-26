@@ -15,11 +15,13 @@ dependencies:
   - numpy
   - dask-ml
   - ydata-profiling
-  # interactive
+    # interactive
   - ipykernel
+  - nbformat
   # plots
   - matplotlib
   # ml
   - glum
   - lightgbm
   - scikit-learn
+  - dalex

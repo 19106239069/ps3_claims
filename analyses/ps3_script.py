@@ -7,6 +7,7 @@ from dask_ml.preprocessing import Categorizer
 from glum import GeneralizedLinearRegressor, TweedieDistribution
 import lightgbm as lgb
 from lightgbm import LGBMRegressor
+import dalex as dx
 from sklearn.compose import ColumnTransformer
 from sklearn.metrics import auc
 from sklearn.model_selection import GridSearchCV, KFold
@@ -728,6 +729,127 @@ metrics_comparison = pd.concat(
 )
 
 display(metrics_comparison.round(5))
+
+# %%
+# ============================================================
+# PS 4 - Exercise 4: Evaluation plots
+# ============================================================
+
+# Step 1: Define the prediction function
+
+def dalex_predict(model, data):
+    return model.predict(data)
+
+
+# Create an explainer for the unconstrained LGBM
+
+explainer_unconstrained = dx.Explainer(
+    model=best_lgbm,
+    data=X_test_t,
+    y=y_test_t,
+    predict_function=dalex_predict,
+    label="Unconstrained LGBM",
+    verbose=False
+)
+
+
+# Create an explainer for the constrained LGBM
+
+explainer_constrained = dx.Explainer(
+    model=best_constrained_lgbm,
+    data=X_test_t,
+    y=y_test_t,
+    predict_function=dalex_predict,
+    label="Constrained LGBM",
+    verbose=False
+)
+
+
+# Identify numerical and categorical features
+
+categorical_features = categoricals
+
+numerical_features = [
+    feature
+    for feature in X_test_t.columns
+    if feature not in categorical_features
+]
+
+print("Categorical features:")
+print(categorical_features)
+
+print("\nNumerical features:")
+print(numerical_features)
+
+# Step 2: Calculate PDPs for numerical features
+# Unconstrained LGBM
+
+pdp_unconstrained_num = explainer_unconstrained.model_profile(
+    type="partial",
+    variables=numerical_features,
+    variable_type="numerical",
+    N=300,
+    grid_points=50,
+    random_state=42,
+    verbose=False
+)
+
+# Constrained LGBM
+
+pdp_constrained_num = explainer_constrained.model_profile(
+    type="partial",
+    variables=numerical_features,
+    variable_type="numerical",
+    N=300,
+    grid_points=50,
+    random_state=42,
+    verbose=False
+)
+
+# Step 3: Plot numerical PDPs
+# Compare unconstrained and constrained LGBM
+
+pdp_unconstrained_num.plot(
+    objects=pdp_constrained_num,
+    geom="aggregates",
+    facet_ncol=3,
+    title="PDPs - Numerical Features",
+    y_title="Predicted Pure Premium"
+)
+
+# Step 4: Calculate PDPs for categorical features
+# Unconstrained LGBM
+
+pdp_unconstrained_cat = explainer_unconstrained.model_profile(
+    type="partial",
+    variables=categorical_features,
+    variable_type="categorical",
+    N=300,
+    random_state=42,
+    verbose=False
+)
+
+# Constrained LGBM
+
+pdp_constrained_cat = explainer_constrained.model_profile(
+    type="partial",
+    variables=categorical_features,
+    variable_type="categorical",
+    N=300,
+    random_state=42,
+    verbose=False
+)
+
+# Step 5: Plot categorical PDPs
+# Compare unconstrained and constrained LGBM
+
+pdp_unconstrained_cat.plot(
+    objects=pdp_constrained_cat,
+    geom="bars",
+    facet_ncol=3,
+    title="PDPs - Categorical Features",
+    y_title="Predicted Pure Premium"
+)
 
 # %%
 # Let's compare the sorting of the pure premium predictions
